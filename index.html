@@ -28,7 +28,7 @@
     <script type="text/babel">
         const { useState, useEffect } = React;
 
-        // --- ไอคอน (สร้างแบบ SVG เพื่อไม่ต้องดึงไฟล์นอก) ---
+        // --- ไอคอน ---
         const IconPrinter = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>;
         const IconRefresh = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"></path><path d="M21 3v5h-5"></path><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"></path><path d="M8 16H3v5"></path></svg>;
         const IconCopy = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>;
@@ -42,7 +42,8 @@
                 date: new Date().toISOString().split('T')[0],
                 time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
                 returnWrongKey: '', totalSale: '', creditCard: '', debit: '', wechat: '', alipay: '', alipayPlus: '',
-                qty1000: '', qty500: '', qty100: '', qty50: '', qty20: '', qty10: '', qty5: '', qty2: '', qty1: '',
+                qty1000: '', qty500: '', qty100: '', qty50: '', qty20: '', 
+                qty10: '', qty5: '', qty2: '', qty1: '', // เพิ่มตัวแปรให้ครบ
                 cashPos: '', recipient: '', note: ''
             });
 
@@ -51,6 +52,7 @@
 
             useEffect(() => {
                 const parse = (val) => parseFloat(val) || 0;
+                // คำนวณแยกเหรียญให้ครบ
                 const breakdown = {
                     amt1000: parse(formData.qty1000) * 1000,
                     amt500: parse(formData.qty500) * 500,
@@ -80,9 +82,14 @@
                 const csvContent = [
                     ["Branch", formData.branch], ["Date", formData.date], ["Time", formData.time],
                     ["--- Sales ---"], ["Total Sale", formData.totalSale], ["Cash POS", formData.cashPos],
-                    ["--- Counts ---"], ["Total Cash Real", calculations.totalCashReal], ["Over/Short", calculations.overShort],
+                    ["--- Counts (Bills) ---"], 
+                    ["1000", formData.qty1000], ["500", formData.qty500], ["100", formData.qty100], ["50", formData.qty50], ["20", formData.qty20],
+                    ["--- Counts (Coins) ---"],
+                    ["10", formData.qty10], ["5", formData.qty5], ["2", formData.qty2], ["1", formData.qty1],
+                    ["Total Cash Real", calculations.totalCashReal], ["Over/Short", calculations.overShort],
                     ["Note", formData.note]
                 ].map(e => e.join(",")).join("\n");
+                
                 const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
                 const link = document.createElement("a");
                 link.href = URL.createObjectURL(blob);
@@ -167,7 +174,11 @@
                                         <DenomRow label="100" qtyName="qty100" qtyValue={formData.qty100} amount={calculations.breakdown.amt100} />
                                         <DenomRow label="50" qtyName="qty50" qtyValue={formData.qty50} amount={calculations.breakdown.amt50} />
                                         <DenomRow label="20" qtyName="qty20" qtyValue={formData.qty20} amount={calculations.breakdown.amt20} />
-                                        <DenomRow label="Coins (All)" qtyName="qty10" qtyValue={formData.qty10} amount={calculations.breakdown.amt10} />
+                                        <!-- แยกเหรียญออกมาให้ครบตาม PDF -->
+                                        <DenomRow label="10" qtyName="qty10" qtyValue={formData.qty10} amount={calculations.breakdown.amt10} />
+                                        <DenomRow label="5" qtyName="qty5" qtyValue={formData.qty5} amount={calculations.breakdown.amt5} />
+                                        <DenomRow label="2" qtyName="qty2" qtyValue={formData.qty2} amount={calculations.breakdown.amt2} />
+                                        <DenomRow label="1" qtyName="qty1" qtyValue={formData.qty1} amount={calculations.breakdown.amt1} />
                                     </div>
                                     <div className="pt-2 border-t-2 border-green-200 print:border-black">
                                         <div className="flex justify-between items-center mb-1"><span className="font-bold text-sm">Cash Real</span><span className="text-lg font-bold">{formatCurrency(calculations.totalCashReal)}</span></div>
