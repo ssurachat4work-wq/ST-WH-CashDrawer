@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ใบนับเงินสด (Cash Drawer) - Smart Fit A4</title>
+    <title>ใบนับเงินสด (Professional Doc)</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -17,37 +17,31 @@
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; -webkit-font-smoothing: antialiased; }
         
-        /* ปรับ Input Number ให้ไม่มีลูกศร */
         input::-webkit-outer-spin-button,
         input::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
         input[type=number] { -moz-appearance: textfield; }
 
-        /* ไอคอนปฏิทินสีขาว */
-        input[type="date"]::-webkit-calendar-picker-indicator,
-        input[type="time"]::-webkit-calendar-picker-indicator {
-            filter: invert(1);
-            cursor: pointer;
-            opacity: 0.8;
-        }
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
 
-        /* ตั้งค่าการพิมพ์ให้พอดี A4 */
+        /* Print Style - บังคับให้เหมือน Template ขาวดำ */
         @media print {
-            @page {
-                size: A4;
-                margin: 0;
+            @page { size: A4; margin: 0; }
+            body { background: white; -webkit-print-color-adjust: exact; }
+            #main-app-ui { display: none !important; } /* ซ่อนหน้าจอ Input */
+            #document-template { 
+                display: block !important; /* โชว์หน้าเอกสาร */
+                position: relative !important; 
+                left: 0 !important;
+                top: 0 !important;
+                width: 100% !important;
+                height: auto !important;
+                margin: 0 auto !important;
+                padding: 20px !important;
             }
-            body {
-                background: white;
-            }
-            #printable-area {
-                width: 100%;
-                max-width: none;
-                box-shadow: none;
-                border: none;
-                border-radius: 0;
-                padding: 20px; /* ระยะขอบกระดาษจริง */
-            }
-            /* ซ่อนส่วนที่ไม่จำเป็นตอนพิมพ์ */
             .no-print { display: none !important; }
         }
     </style>
@@ -66,37 +60,41 @@
         const IconCheck = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>;
         const IconExcel = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h2"></path><path d="M8 17h2"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg>;
         const IconImage = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
-        const IconUser = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path><circle cx="12" cy="7" r="4"></circle></svg>;
-
+        
         const blockInvalidChar = (e) => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault();
+        const formatCurrency = (num) => new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 2 }).format(num);
 
-        // --- Component แถวนับเงิน (ปรับให้กระชับขึ้น) ---
-        const DenomRow = ({ label, qtyName, qtyValue, amount, onChange, formatCurrency }) => (
+        // --- UI Component: แถวนับเงิน (หน้าจอปกติ) ---
+        const DenomRow = ({ label, qtyName, qtyValue, amount, onChange }) => (
             <div className="grid grid-cols-12 gap-2 items-center py-1 border-b border-gray-100 text-sm hover:bg-gray-50 transition-colors">
-                <div className="col-span-3 font-semibold text-gray-700 text-base">{label}</div>
+                <div className="col-span-3 font-semibold text-gray-700">{label}</div>
                 <div className="col-span-4">
-                    <input 
-                        type="number" 
-                        min="0"
-                        name={qtyName} 
-                        value={qtyValue} 
-                        onChange={onChange}
-                        onKeyDown={blockInvalidChar} 
-                        placeholder="0" 
-                        // ปรับความสูงลดลงเล็กน้อย (h-8) เพื่อประหยัดพื้นที่แนวตั้ง
-                        className="w-full h-8 p-1 border border-gray-300 rounded text-center focus:border-blue-500 outline-none text-lg transition-colors focus:ring-2 focus:ring-blue-100 bg-white" 
-                    />
+                    <input type="number" min="0" name={qtyName} value={qtyValue} onChange={onChange} onKeyDown={blockInvalidChar} placeholder="0" className="w-full h-8 p-1 border border-gray-300 rounded text-center focus:border-blue-500 outline-none transition-colors focus:ring-2 focus:ring-blue-100 bg-white" />
                 </div>
-                <div className="col-span-5 text-right font-mono text-gray-900 bg-gray-50 p-1 rounded text-base">
+                <div className="col-span-5 text-right font-mono text-gray-900 bg-gray-50 p-1 rounded">
                     {formatCurrency(amount)}
+                </div>
+            </div>
+        );
+
+        // --- Document Component: แถวนับเงิน (สำหรับเอกสารขาว-ดำ) ---
+        const DocDenomRow = ({ label, qty, amount }) => (
+            <div className="flex items-center justify-between py-1 border-b border-gray-200 last:border-0 h-9">
+                <div className="w-12 font-bold text-gray-800">{label}</div>
+                <div className="flex-1 flex gap-2 items-center justify-end">
+                    <div className="w-16 h-7 border border-gray-300 rounded flex items-center justify-center text-gray-600 bg-white text-sm">
+                        {qty || 0}
+                    </div>
+                    <div className="w-24 text-right font-mono font-bold text-gray-900 text-sm">
+                        {formatCurrency(amount)}
+                    </div>
                 </div>
             </div>
         );
 
         function App() {
             const initialState = {
-                branch: '', 
-                date: new Date().toISOString().split('T')[0],
+                branch: '', date: new Date().toISOString().split('T')[0],
                 time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
                 returnWrongKey: '', totalSale: '', creditCard: '', debit: '', wechat: '', alipay: '',
                 qty1000: '', qty500: '', qty100: '', qty50: '', qty20: '', 
@@ -111,37 +109,28 @@
             const [isLoaded, setIsLoaded] = useState(false);
 
             useEffect(() => {
-                const savedData = localStorage.getItem('cashDrawerData_SmartFit');
-                if (savedData) {
-                    try { setFormData(JSON.parse(savedData)); } catch (e) { console.error(e); }
-                }
+                const savedData = localStorage.getItem('cashDrawerDoc_v1');
+                if (savedData) try { setFormData(JSON.parse(savedData)); } catch (e) {}
                 setIsLoaded(true);
             }, []);
 
             useEffect(() => {
-                if (isLoaded) localStorage.setItem('cashDrawerData_SmartFit', JSON.stringify(formData));
+                if (isLoaded) localStorage.setItem('cashDrawerDoc_v1', JSON.stringify(formData));
             }, [formData, isLoaded]);
 
             useEffect(() => {
                 const parse = (val) => parseFloat(val) || 0;
                 const safeFloat = (num) => Math.round(num * 100) / 100;
-
                 const breakdown = {
-                    amt1000: safeFloat(parse(formData.qty1000) * 1000),
-                    amt500: safeFloat(parse(formData.qty500) * 500),
-                    amt100: safeFloat(parse(formData.qty100) * 100),
-                    amt50: safeFloat(parse(formData.qty50) * 50),
-                    amt20: safeFloat(parse(formData.qty20) * 20),
-                    amt10: safeFloat(parse(formData.qty10) * 10),
-                    amt5: safeFloat(parse(formData.qty5) * 5),
-                    amt2: safeFloat(parse(formData.qty2) * 2),
+                    amt1000: safeFloat(parse(formData.qty1000) * 1000), amt500: safeFloat(parse(formData.qty500) * 500),
+                    amt100: safeFloat(parse(formData.qty100) * 100), amt50: safeFloat(parse(formData.qty50) * 50),
+                    amt20: safeFloat(parse(formData.qty20) * 20), amt10: safeFloat(parse(formData.qty10) * 10),
+                    amt5: safeFloat(parse(formData.qty5) * 5), amt2: safeFloat(parse(formData.qty2) * 2),
                     amt1: safeFloat(parse(formData.qty1) * 1),
                 };
-                
                 const totalCashReal = safeFloat(Object.values(breakdown).reduce((a, b) => a + b, 0));
                 const cashPos = parse(formData.cashPos);
                 const overShort = cashPos ? safeFloat(totalCashReal - cashPos) : 0;
-                
                 setCalculations({ totalCashReal, overShort, breakdown });
             }, [formData]);
 
@@ -154,31 +143,31 @@
 
             const handleSaveImage = async () => {
                 setIsGeneratingImg(true);
-                await new Promise(r => setTimeout(r, 100)); // รอ Render นิดนึง
+                // รอให้ Template พร้อม
+                await new Promise(r => setTimeout(r, 200));
+                
                 try {
-                    const element = document.getElementById('printable-area');
+                    // เลือก ID ที่เป็น Template เอกสาร ไม่ใช่หน้าจอหลัก
+                    const element = document.getElementById('document-template');
+                    
+                    // ต้องทำให้มันมองเห็นชั่วคราวเพื่อให้ html2canvas จับภาพได้
+                    element.style.display = 'block';
+                    
                     const canvas = await html2canvas(element, {
-                        scale: 3, 
+                        scale: 2.5, // ความคมชัดสูง
                         backgroundColor: "#ffffff",
-                        useCORS: true,
                         logging: false,
-                        // แก้ไข: ไม่ให้ตัดขอบล่าง
-                        windowHeight: element.scrollHeight + 50, 
-                        onclone: (doc) => {
-                            const el = doc.getElementById('printable-area');
-                            if(el) {
-                                el.style.boxShadow = 'none';
-                                el.style.border = 'none'; // เอาขอบออกตอนเซฟรูป
-                                el.style.borderRadius = '0';
-                                el.style.padding = '20px'; // เพิ่ม Padding ให้รูปดูไม่อึดอัด
-                            }
-                        }
+                        windowWidth: 800,
                     });
+
+                    // ซ่อนกลับไปเหมือนเดิม
+                    element.style.display = 'none';
+
                     const link = document.createElement('a');
-                    link.download = `CashReport_${formData.date}.png`;
+                    link.download = `CashReport_${formData.date}_${formData.branch}.png`;
                     link.href = canvas.toDataURL('image/png');
                     link.click();
-                } catch (err) { alert("Error creating image: " + err); }
+                } catch (err) { alert("Error: " + err); }
                 setIsGeneratingImg(false);
             };
 
@@ -207,195 +196,229 @@
 
             const handleReset = () => {
                 if(window.confirm("ต้องการรีเซ็ตค่าทั้งหมดหรือไม่?")) {
-                    localStorage.removeItem('cashDrawerData_SmartFit');
+                    localStorage.removeItem('cashDrawerDoc_v1');
                     setFormData(initialState);
                 }
             };
 
-            const formatCurrency = (num) => new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 2 }).format(num);
-
             if (!isLoaded) return <div className="p-10 text-center">Loading...</div>;
 
             return (
-                <div className="min-h-screen p-2 sm:p-8 font-sans print:bg-white print:p-0 bg-gray-100">
+                <div className="min-h-screen bg-gray-100 flex flex-col items-center py-8">
                     
-                    {/* Control Panel (Hidden when printing) */}
-                    <div className="max-w-3xl mx-auto mb-4 flex flex-col gap-4 print:hidden bg-white p-4 rounded-xl shadow-sm border border-gray-200 no-print">
-                        <div className="flex justify-between items-center">
-                            <h1 className="text-lg font-bold text-gray-800">ใบนับเงินสด (Smart Fit)</h1>
-                            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">💾 Auto-Saved</span>
-                        </div>
-                        <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                            <button onClick={handleReset} className="flex items-center gap-1 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700 text-sm font-medium transition-colors"><IconRefresh /> Reset</button>
-                            <button onClick={handleCopyText} className="flex items-center gap-1 px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 text-sm font-medium transition-colors">{copied ? <IconCheck /> : <IconCopy />} {copied ? 'Copied!' : 'Text'}</button>
-                            <button onClick={handleExportCSV} className="flex items-center gap-1 px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 text-sm font-medium transition-colors"><IconExcel /> Excel</button>
-                            <button onClick={handleSaveImage} disabled={isGeneratingImg} className="flex items-center gap-1 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 text-sm font-medium transition-colors">
-                                <IconImage /> {isGeneratingImg ? 'Creating...' : 'Image'}
-                            </button>
-                            <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm text-sm font-medium transition-colors"><IconPrinter /> PDF/Print</button>
-                        </div>
-                    </div>
-
-                    {/* --- PRINTABLE AREA --- */}
-                    {/* แก้ไข: เอา overflow-hidden ออก เพื่อไม่ให้รูปขาด และกำหนด max-width ให้พอดี A4 */}
-                    <div id="printable-area" className="max-w-[210mm] mx-auto bg-white shadow-lg sm:rounded-lg border border-gray-200 print:shadow-none print:border-none print:w-full print:max-w-none pb-8">
-                        
-                        {/* HEADER - ปรับให้ Compact ขึ้น แต่ยังอ่านง่าย */}
-                        <div className="bg-slate-800 text-white p-5 print:bg-white print:text-black print:border-b-2 print:border-black print:p-0 print:pb-3 print:mb-4 relative">
-                            <div className="flex flex-col sm:flex-row print:flex-row justify-between items-start gap-4 sm:gap-0">
-                                <div className="w-full sm:flex-1 print:flex-1 sm:mr-8 print:mr-8">
-                                    <label className="block text-sm text-slate-300 print:text-black font-medium mb-1">สาขา / Branch Name</label>
-                                    <input 
-                                        type="text" 
-                                        name="branch" 
-                                        value={formData.branch} 
-                                        onChange={handleInputChange} 
-                                        className="bg-transparent border-b border-slate-500 text-white print:text-black w-full text-xl py-1 focus:outline-none focus:border-blue-400 transition-colors placeholder-slate-500 print:placeholder-transparent" 
-                                        placeholder="ระบุสาขา..." 
-                                    />
-                                </div>
-                                
-                                <div className="flex gap-4 items-end">
-                                    <div className="flex flex-col">
-                                        <label className="text-sm text-slate-300 print:text-black font-medium mb-1">วันที่ / Date</label>
-                                        <input 
-                                            type="date" 
-                                            name="date" 
-                                            value={formData.date} 
-                                            onChange={handleInputChange} 
-                                            className="bg-transparent text-white print:text-black text-base border-b border-slate-500 focus:outline-none py-1"
-                                        />
-                                    </div>
-                                    <div className="flex flex-col">
-                                        <label className="text-sm text-slate-300 print:text-black font-medium mb-1">เวลา / Time</label>
-                                        <input 
-                                            type="time" 
-                                            name="time" 
-                                            value={formData.time} 
-                                            onChange={handleInputChange} 
-                                            className="bg-transparent text-white print:text-black text-base border-b border-slate-500 focus:outline-none py-1 w-28"
-                                        />
-                                    </div>
-                                </div>
+                    {/* --- MAIN UI (INPUT SCREEN) --- */}
+                    <div id="main-app-ui" className="w-full max-w-3xl px-4">
+                        <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-200 mb-6 flex flex-col md:flex-row justify-between items-center gap-4">
+                            <div>
+                                <h1 className="text-xl font-bold text-gray-800 flex items-center gap-2">
+                                    ใบนับเงินสด <span className="text-sm font-normal text-gray-400">| Daily Cash</span>
+                                </h1>
+                                <p className="text-xs text-green-600 mt-1">● ระบบบันทึกอัตโนมัติ (Auto-Save)</p>
+                            </div>
+                            <div className="flex flex-wrap gap-2">
+                                <button onClick={handleReset} className="btn-action bg-gray-100 hover:bg-gray-200 text-gray-600 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition"><IconRefresh /> Reset</button>
+                                <button onClick={handleCopyText} className="btn-action bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition">{copied ? <IconCheck /> : <IconCopy />} Text</button>
+                                <button onClick={handleExportCSV} className="btn-action bg-green-50 hover:bg-green-100 text-green-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition"><IconExcel /> Excel</button>
+                                <button onClick={handleSaveImage} disabled={isGeneratingImg} className="btn-action bg-orange-50 hover:bg-orange-100 text-orange-700 px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition shadow-sm border border-orange-100">
+                                    <IconImage /> {isGeneratingImg ? 'Creating...' : 'Image (Doc)'}
+                                </button>
+                                <button onClick={handlePrint} className="btn-action bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg text-sm font-medium flex items-center gap-1 transition shadow-lg shadow-blue-200"><IconPrinter /> Print</button>
                             </div>
                         </div>
 
-                        {/* CONTENT - ใช้ Grid 2 คอลัมน์ */}
-                        <div className="p-5 print:p-0 grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-6 print:gap-6">
-                            
-                            {/* LEFT COLUMN */}
-                            <div className="flex flex-col gap-4">
-                                {/* Sale Info Box */}
-                                <div className="bg-blue-50 p-4 rounded-xl border border-blue-100 print:bg-transparent print:border print:border-black print:rounded-none">
-                                    <h2 className="text-lg font-bold text-blue-800 mb-3 border-b border-blue-200 pb-2 print:text-black print:border-black flex items-center gap-2">
-                                        Sale Information
-                                    </h2>
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between items-center">
-                                            <label className="font-semibold text-gray-700 text-base">Total Sale</label>
-                                            <input type="number" min="0" onKeyDown={blockInvalidChar} name="totalSale" value={formData.totalSale} onChange={handleInputChange} className="w-40 h-10 text-right border border-gray-300 rounded px-2 text-xl bg-white focus:border-blue-500 outline-none focus:ring-2 focus:ring-blue-100 transition-all font-bold" placeholder="0.00" />
-                                        </div>
-                                        <div className="flex justify-between items-center">
-                                            <label className="font-semibold text-red-600 print:text-black text-base">Return/Wrong Key</label>
-                                            <input type="number" min="0" onKeyDown={blockInvalidChar} name="returnWrongKey" value={formData.returnWrongKey} onChange={handleInputChange} className="w-40 h-10 text-right border border-gray-300 rounded px-2 text-xl bg-white focus:border-red-500 outline-none focus:ring-2 focus:ring-red-100 transition-all text-red-600 font-bold" placeholder="0.00" />
-                                        </div>
-                                        
-                                        <div className="border-t border-gray-200 my-2 pt-2 space-y-2">
-                                            <div className="flex justify-between items-center text-gray-600">
-                                                <label className="font-medium text-base">Credit Card</label>
-                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="creditCard" value={formData.creditCard} onChange={handleInputChange} className="w-28 h-8 text-right border border-gray-300 rounded px-2 bg-white focus:border-blue-400 outline-none text-base" />
-                                            </div>
-                                            <div className="flex justify-between items-center text-gray-600">
-                                                <label className="font-medium text-base">Debit Card</label>
-                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="debit" value={formData.debit} onChange={handleInputChange} className="w-28 h-8 text-right border border-gray-300 rounded px-2 bg-white focus:border-blue-400 outline-none text-base" />
-                                            </div>
-                                            <div className="flex justify-between items-center text-gray-600">
-                                                <label className="font-medium text-base">WeChat</label>
-                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="wechat" value={formData.wechat} onChange={handleInputChange} className="w-28 h-8 text-right border border-gray-300 rounded px-2 bg-white focus:border-blue-400 outline-none text-base" />
-                                            </div>
-                                            <div className="flex justify-between items-center text-gray-600">
-                                                <label className="font-medium text-base">Alipay</label>
-                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="alipay" value={formData.alipay} onChange={handleInputChange} className="w-28 h-8 text-right border border-gray-300 rounded px-2 bg-white focus:border-blue-400 outline-none text-base" />
-                                            </div>
-                                        </div>
+                        {/* Input Form Area */}
+                        <div className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                            <div className="bg-slate-800 p-6 text-white">
+                                <div className="flex flex-col md:flex-row gap-6">
+                                    <div className="flex-1">
+                                        <label className="text-xs uppercase font-bold text-slate-400 block mb-1">Branch Name</label>
+                                        <input type="text" name="branch" value={formData.branch} onChange={handleInputChange} placeholder="ชื่อสาขา..." className="w-full bg-transparent border-b border-slate-600 text-xl py-1 focus:outline-none focus:border-blue-400 placeholder-slate-600 font-medium" />
                                     </div>
-                                </div>
-
-                                {/* Recipient & Note Box */}
-                                <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 print:bg-transparent print:border print:border-black print:rounded-none flex flex-col gap-3">
-                                    <div>
-                                        <label className="flex items-center gap-2 text-sm font-bold text-gray-700 mb-1 print:text-black">
-                                            <IconUser /> Recipient Name / ผู้ส่งเงิน
-                                        </label>
-                                        <div className="relative">
-                                            <input 
-                                                type="text" 
-                                                name="recipient" 
-                                                value={formData.recipient} 
-                                                onChange={handleInputChange}
-                                                className="w-full p-2 pl-3 border border-gray-300 rounded-lg bg-white focus:outline-none focus:border-blue-500 focus:ring-2 focus:ring-blue-100 transition-all text-base"
-                                                placeholder="ลงชื่อพนักงาน..."
-                                            />
+                                    <div className="flex gap-4">
+                                        <div>
+                                            <label className="text-xs uppercase font-bold text-slate-400 block mb-1">Date</label>
+                                            <input type="date" name="date" value={formData.date} onChange={handleInputChange} className="bg-slate-700/50 rounded px-2 py-1 text-sm border border-slate-600 focus:outline-none focus:border-blue-400" />
                                         </div>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-bold text-gray-700 mb-1 print:text-black">Note / หมายเหตุ</label>
-                                        <textarea 
-                                            name="note" 
-                                            value={formData.note} 
-                                            onChange={handleInputChange} 
-                                            rows="4" 
-                                            className="w-full p-2 border border-gray-300 rounded-lg text-base focus:border-blue-500 focus:ring-2 focus:ring-blue-100 outline-none bg-white transition-all resize-none"
-                                            placeholder="บันทึกข้อความเพิ่มเติม..."
-                                        ></textarea>
+                                        <div>
+                                            <label className="text-xs uppercase font-bold text-slate-400 block mb-1">Time</label>
+                                            <input type="time" name="time" value={formData.time} onChange={handleInputChange} className="bg-slate-700/50 rounded px-2 py-1 text-sm border border-slate-600 focus:outline-none focus:border-blue-400" />
+                                        </div>
                                     </div>
                                 </div>
                             </div>
 
-                            {/* RIGHT COLUMN */}
-                            <div className="flex flex-col gap-4">
-                                <div className="bg-green-50 p-4 rounded-xl border border-green-100 print:bg-transparent print:border print:border-black print:rounded-none h-full">
-                                    <h2 className="text-lg font-bold text-green-800 mb-3 border-b border-green-200 pb-2 flex justify-between items-center print:text-black print:border-black">
-                                        Money in Drawer
-                                    </h2>
-
-                                    {/* Denominations - Padding ลดลงใน DenomRow Component */}
-                                    <div className="mb-4">
-                                        <DenomRow label="1,000" qtyName="qty1000" qtyValue={formData.qty1000} amount={calculations.breakdown.amt1000} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="500" qtyName="qty500" qtyValue={formData.qty500} amount={calculations.breakdown.amt500} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="100" qtyName="qty100" qtyValue={formData.qty100} amount={calculations.breakdown.amt100} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="50" qtyName="qty50" qtyValue={formData.qty50} amount={calculations.breakdown.amt50} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="20" qtyName="qty20" qtyValue={formData.qty20} amount={calculations.breakdown.amt20} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="10" qtyName="qty10" qtyValue={formData.qty10} amount={calculations.breakdown.amt10} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="5" qtyName="qty5" qtyValue={formData.qty5} amount={calculations.breakdown.amt5} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="2" qtyName="qty2" qtyValue={formData.qty2} amount={calculations.breakdown.amt2} onChange={handleInputChange} formatCurrency={formatCurrency} />
-                                        <DenomRow label="1" qtyName="qty1" qtyValue={formData.qty1} amount={calculations.breakdown.amt1} onChange={handleInputChange} formatCurrency={formatCurrency} />
+                            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-8">
+                                {/* Left Column */}
+                                <div className="space-y-6">
+                                    <div className="bg-blue-50/50 p-5 rounded-xl border border-blue-100">
+                                        <h3 className="text-blue-800 font-bold mb-4 border-b border-blue-200 pb-2 flex items-center gap-2">Sale Information</h3>
+                                        <div className="space-y-3">
+                                            <div className="flex justify-between items-center">
+                                                <span className="font-semibold text-gray-700">Total Sale</span>
+                                                <input type="number" name="totalSale" value={formData.totalSale} onChange={handleInputChange} onKeyDown={blockInvalidChar} placeholder="0.00" className="w-32 text-right p-1 border border-gray-300 rounded focus:border-blue-500 outline-none text-lg font-bold" />
+                                            </div>
+                                            <div className="flex justify-between items-center text-red-600">
+                                                <span className="font-semibold">Return / Wrong Key</span>
+                                                <input type="number" name="returnWrongKey" value={formData.returnWrongKey} onChange={handleInputChange} onKeyDown={blockInvalidChar} placeholder="0.00" className="w-32 text-right p-1 border border-red-300 rounded focus:border-red-500 outline-none text-lg font-bold text-red-600 bg-red-50" />
+                                            </div>
+                                            <div className="pt-3 border-t border-blue-200 space-y-2">
+                                                {['Credit Card', 'Debit Card', 'WeChat', 'Alipay'].map(label => (
+                                                    <div key={label} className="flex justify-between items-center text-sm text-gray-600">
+                                                        <span>{label}</span>
+                                                        <input type="number" name={label.toLowerCase().replace(' ', '').replace('/', '')} value={formData[label.toLowerCase().replace(' ', '').replace('/', '')]} onChange={handleInputChange} onKeyDown={blockInvalidChar} className="w-24 text-right p-1 border border-gray-300 rounded focus:border-blue-400 outline-none" />
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        </div>
                                     </div>
 
-                                    <div className="pt-3 border-t-2 border-green-200 print:border-black">
+                                    <div className="bg-gray-50 p-5 rounded-xl border border-gray-200">
+                                        <div className="mb-3">
+                                            <label className="block font-bold text-gray-700 mb-1 text-sm">Recipient Name / ผู้ส่งเงิน</label>
+                                            <input type="text" name="recipient" value={formData.recipient} onChange={handleInputChange} placeholder="ชื่อพนักงาน..." className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 outline-none" />
+                                        </div>
+                                        <div>
+                                            <label className="block font-bold text-gray-700 mb-1 text-sm">Note / หมายเหตุ</label>
+                                            <textarea name="note" value={formData.note} onChange={handleInputChange} rows="3" placeholder="รายละเอียดเพิ่มเติม..." className="w-full p-2 border border-gray-300 rounded focus:border-blue-500 outline-none resize-none text-sm"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Right Column */}
+                                <div className="bg-green-50/50 p-5 rounded-xl border border-green-100 h-full flex flex-col">
+                                    <h3 className="text-green-800 font-bold mb-4 border-b border-green-200 pb-2">Money in Drawer</h3>
+                                    <div className="flex-1 space-y-1">
+                                        <DenomRow label="1,000" qtyName="qty1000" qtyValue={formData.qty1000} amount={calculations.breakdown.amt1000} onChange={handleInputChange} />
+                                        <DenomRow label="500" qtyName="qty500" qtyValue={formData.qty500} amount={calculations.breakdown.amt500} onChange={handleInputChange} />
+                                        <DenomRow label="100" qtyName="qty100" qtyValue={formData.qty100} amount={calculations.breakdown.amt100} onChange={handleInputChange} />
+                                        <DenomRow label="50" qtyName="qty50" qtyValue={formData.qty50} amount={calculations.breakdown.amt50} onChange={handleInputChange} />
+                                        <DenomRow label="20" qtyName="qty20" qtyValue={formData.qty20} amount={calculations.breakdown.amt20} onChange={handleInputChange} />
+                                        <DenomRow label="10" qtyName="qty10" qtyValue={formData.qty10} amount={calculations.breakdown.amt10} onChange={handleInputChange} />
+                                        <DenomRow label="5" qtyName="qty5" qtyValue={formData.qty5} amount={calculations.breakdown.amt5} onChange={handleInputChange} />
+                                        <DenomRow label="2" qtyName="qty2" qtyValue={formData.qty2} amount={calculations.breakdown.amt2} onChange={handleInputChange} />
+                                        <DenomRow label="1" qtyName="qty1" qtyValue={formData.qty1} amount={calculations.breakdown.amt1} onChange={handleInputChange} />
+                                    </div>
+                                    <div className="mt-4 pt-4 border-t-2 border-green-200">
                                         <div className="flex justify-between items-center mb-2">
-                                            <span className="font-bold text-base text-gray-700">Cash Real / เงินสดจริง</span>
+                                            <span className="font-bold text-gray-700">Cash Real</span>
                                             <span className="text-xl font-bold text-gray-900">{formatCurrency(calculations.totalCashReal)}</span>
                                         </div>
-                                        <div className="flex justify-between items-center mb-3 text-base text-gray-600 print:text-black">
-                                            <span className="font-medium">Cash POS / ยอดจากเครื่อง</span>
-                                            <input type="number" min="0" onKeyDown={blockInvalidChar} name="cashPos" value={formData.cashPos} onChange={handleInputChange} placeholder="0.00" className="w-40 h-10 px-2 text-right border border-gray-300 rounded text-xl bg-white focus:border-blue-500 outline-none focus:ring-2 focus:ring-blue-100 font-bold" />
+                                        <div className="flex justify-between items-center mb-3">
+                                            <span className="text-gray-600 text-sm font-medium">Cash POS</span>
+                                            <input type="number" name="cashPos" value={formData.cashPos} onChange={handleInputChange} onKeyDown={blockInvalidChar} placeholder="0.00" className="w-32 text-right p-1 border border-gray-300 rounded focus:border-blue-500 outline-none font-bold" />
                                         </div>
-                                        <div className={`p-3 rounded-lg flex justify-between items-center border-2 ${calculations.overShort === 0 ? 'bg-gray-100 border-gray-200 text-gray-600' : calculations.overShort > 0 ? 'bg-green-100 border-green-300 text-green-800' : 'bg-red-100 border-red-300 text-red-800'} print:border-black print:bg-transparent print:text-black`}>
-                                            <div className="font-bold text-sm uppercase flex items-center gap-2">
-                                                {calculations.overShort === 0 ? 'Balanced (พอดี)' : calculations.overShort > 0 ? 'OVER (+ เกิน)' : 'SHORT (- ขาด)'}
-                                            </div>
-                                            <div className="text-2xl font-bold font-mono">{formatCurrency(Math.abs(calculations.overShort))}</div>
+                                        <div className={`p-2 rounded border text-center font-bold ${calculations.overShort === 0 ? 'bg-gray-100 border-gray-300 text-gray-600' : calculations.overShort > 0 ? 'bg-green-100 border-green-400 text-green-700' : 'bg-red-100 border-red-400 text-red-700'}`}>
+                                            {calculations.overShort === 0 ? 'BALANCED (พอดี)' : calculations.overShort > 0 ? `OVER (+${formatCurrency(calculations.overShort)})` : `SHORT (${formatCurrency(calculations.overShort)})`}
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
+                        <div className="text-center text-xs text-gray-400 mt-8 mb-4">© Cash Drawer System - Professional Edition</div>
                     </div>
-                    
-                    <div className="text-center text-xs text-gray-400 mt-6 pb-4 print:hidden">
-                        © Cash Drawer System - By SHU ST TEAM
+
+
+                    {/* --- HIDDEN DOCUMENT TEMPLATE (สำหรับสร้างรูป & Print) --- */}
+                    {/* นี่คือส่วนที่ถูกซ่อนไว้ จะโชว์เฉพาะตอนกด Image หรือ Print */}
+                    <div id="document-template" className="hidden bg-white mx-auto w-[210mm] p-8 text-black" style={{ maxWidth: '800px' }}>
+                        
+                        {/* Header */}
+                        <div className="flex justify-between items-end border-b-2 border-black pb-2 mb-6">
+                            <div className="flex-1 pr-8">
+                                <div className="text-xs font-bold mb-1">สาขา / Branch Name</div>
+                                <div className="text-xl font-bold">{formData.branch || '_________________'}</div>
+                            </div>
+                            <div className="flex gap-8 text-right">
+                                <div>
+                                    <div className="text-xs font-bold mb-1">วันที่ / Date</div>
+                                    <div className="text-lg font-medium">{formData.date}</div>
+                                </div>
+                                <div>
+                                    <div className="text-xs font-bold mb-1">เวลา / Time</div>
+                                    <div className="text-lg font-medium">{formData.time}</div>
+                                </div>
+                            </div>
+                        </div>
+
+                        {/* Content Grid */}
+                        <div className="grid grid-cols-2 gap-6 h-full items-start">
+                            
+                            {/* Left Column */}
+                            <div className="flex flex-col gap-4">
+                                {/* Sale Box */}
+                                <div className="border border-black p-4">
+                                    <h2 className="text-lg font-bold border-b border-black pb-2 mb-3">Sale Information</h2>
+                                    <div className="space-y-3">
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-lg">Total Sale</span>
+                                            <div className="text-xl font-bold border border-gray-300 px-3 py-1 rounded w-32 text-right bg-gray-50">{formData.totalSale || '0.00'}</div>
+                                        </div>
+                                        <div className="flex justify-between items-center">
+                                            <span className="font-bold text-base">Return/Wrong Key</span>
+                                            <div className="text-lg font-bold border border-gray-300 px-3 py-1 rounded w-32 text-right bg-gray-50">{formData.returnWrongKey || '0.00'}</div>
+                                        </div>
+                                        <div className="pt-2 mt-2 border-t border-gray-300 space-y-2">
+                                            {['Credit Card', 'Debit Card', 'WeChat', 'Alipay'].map(label => {
+                                                const key = label.toLowerCase().replace(' ', '').replace('/', '');
+                                                return (
+                                                    <div key={key} className="flex justify-between items-center">
+                                                        <span className="text-sm font-medium">{label}</span>
+                                                        <div className="border border-gray-200 px-2 py-1 w-24 text-right text-sm">{formData[key] || ''}</div>
+                                                    </div>
+                                                );
+                                            })}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* User Box */}
+                                <div className="border border-black p-4 h-full">
+                                    <div className="mb-4">
+                                        <div className="font-bold text-sm mb-1">👤 Recipient Name / ผู้ส่งเงิน</div>
+                                        <div className="border border-gray-300 p-2 rounded text-lg font-medium bg-gray-50 min-h-[45px]">{formData.recipient}</div>
+                                    </div>
+                                    <div>
+                                        <div className="font-bold text-sm mb-1">Note / หมายเหตุ</div>
+                                        <div className="border border-gray-300 p-2 rounded text-sm bg-gray-50 min-h-[80px] whitespace-pre-wrap">{formData.note}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            {/* Right Column */}
+                            <div className="border border-black p-4 h-full">
+                                <h2 className="text-lg font-bold border-b border-black pb-2 mb-2">Money in Drawer</h2>
+                                <div>
+                                    <DocDenomRow label="1,000" qty={formData.qty1000} amount={calculations.breakdown.amt1000} />
+                                    <DocDenomRow label="500" qty={formData.qty500} amount={calculations.breakdown.amt500} />
+                                    <DocDenomRow label="100" qty={formData.qty100} amount={calculations.breakdown.amt100} />
+                                    <DocDenomRow label="50" qty={formData.qty50} amount={calculations.breakdown.amt50} />
+                                    <DocDenomRow label="20" qty={formData.qty20} amount={calculations.breakdown.amt20} />
+                                    <DocDenomRow label="10" qty={formData.qty10} amount={calculations.breakdown.amt10} />
+                                    <DocDenomRow label="5" qty={formData.qty5} amount={calculations.breakdown.amt5} />
+                                    <DocDenomRow label="2" qty={formData.qty2} amount={calculations.breakdown.amt2} />
+                                    <DocDenomRow label="1" qty={formData.qty1} amount={calculations.breakdown.amt1} />
+                                </div>
+                                <div className="border-t-2 border-black mt-3 pt-3">
+                                    <div className="flex justify-between items-center mb-2">
+                                        <span className="font-bold text-lg">Cash Real / เงินสดจริง</span>
+                                        <span className="font-bold text-xl">{formatCurrency(calculations.totalCashReal)}</span>
+                                    </div>
+                                    <div className="flex justify-between items-center mb-3">
+                                        <span className="font-medium text-gray-600">Cash POS / ยอดจากเครื่อง</span>
+                                        <div className="border border-gray-300 px-2 py-1 min-w-[100px] text-right rounded font-bold">{formData.cashPos || '0.00'}</div>
+                                    </div>
+                                    <div className="border-2 border-black p-2 rounded text-center">
+                                        <div className="font-bold text-lg uppercase">
+                                            {calculations.overShort === 0 ? 'BALANCED (พอดี)' : calculations.overShort > 0 ? 'OVER (+)' : 'SHORT (-)'}
+                                        </div>
+                                        <div className="font-mono text-2xl font-bold">{formatCurrency(Math.abs(calculations.overShort))}</div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
                     </div>
+
                 </div>
             );
         }
