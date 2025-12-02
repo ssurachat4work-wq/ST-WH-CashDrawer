@@ -3,22 +3,17 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ใบนับเงินสด (Cash Drawer)</title>
+    <title>ใบนับเงินสด (Cash Drawer) - Pro Version</title>
     
-    <!-- 1. นำเข้า Tailwind CSS (ตกแต่ง) -->
     <script src="https://cdn.tailwindcss.com"></script>
     
-    <!-- 2. นำเข้า React (สมอง) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
-    <!-- 3. ตัวแปลภาษา (Babel) -->
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
 
-    <!-- 4. ตัวแปลง HTML เป็นรูปภาพ (html2canvas) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <!-- ปรับแต่ง Font -->
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;700&display=swap');
         body { font-family: 'Sarabun', sans-serif; }
@@ -49,6 +44,9 @@
         const IconExcel = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"></path><polyline points="14 2 14 8 20 8"></polyline><path d="M8 13h2"></path><path d="M8 17h2"></path><path d="M14 13h2"></path><path d="M14 17h2"></path></svg>;
         const IconImage = () => <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>;
 
+        // ฟังก์ชันป้องกันการกดปุ่มที่ไม่ใช่ตัวเลข (กันค่าติดลบ)
+        const blockInvalidChar = (e) => ['e', 'E', '+', '-'].includes(e.key) && e.preventDefault();
+
         // --- 2. Component แถวนับเงิน ---
         const DenomRow = ({ label, qtyName, qtyValue, amount, onChange, formatCurrency }) => (
             <div className="grid grid-cols-12 gap-2 items-center py-2 border-b border-gray-100 text-sm">
@@ -56,11 +54,13 @@
                 <div className="col-span-4">
                     <input 
                         type="number" 
+                        min="0"
                         name={qtyName} 
                         value={qtyValue} 
-                        onChange={onChange} 
+                        onChange={onChange}
+                        onKeyDown={blockInvalidChar} // [UPDATE] กันกดลบ 
                         placeholder="0" 
-                        className="w-full h-10 p-1 border border-gray-300 rounded text-center focus:border-blue-500 outline-none text-lg" 
+                        className="w-full h-10 p-1 border border-gray-300 rounded text-center focus:border-blue-500 outline-none text-lg transition-colors" 
                     />
                 </div>
                 <div className="col-span-5 text-right font-mono text-gray-900 bg-gray-50 p-1 rounded">
@@ -71,7 +71,8 @@
 
         // --- 3. ตัวแอปหลัก ---
         function App() {
-            const [formData, setFormData] = useState({
+            // ค่าเริ่มต้น (Default State)
+            const initialState = {
                 branch: '', fix: '', 
                 date: new Date().toISOString().split('T')[0],
                 time: new Date().toLocaleTimeString('en-US', { hour12: false, hour: '2-digit', minute: '2-digit' }),
@@ -79,28 +80,60 @@
                 qty1000: '', qty500: '', qty100: '', qty50: '', qty20: '', 
                 qty10: '', qty5: '', qty2: '', qty1: '', 
                 cashPos: '', recipient: '', note: ''
-            });
+            };
 
+            const [formData, setFormData] = useState(initialState);
             const [calculations, setCalculations] = useState({ totalCashReal: 0, overShort: 0, breakdown: {} });
             const [copied, setCopied] = useState(false);
             const [isGeneratingImg, setIsGeneratingImg] = useState(false);
+            const [isLoaded, setIsLoaded] = useState(false); // เช็คว่าโหลดข้อมูลเสร็จหรือยัง
 
+            // [UPDATE] 1. โหลดข้อมูลจาก LocalStorage เมื่อเปิดเว็บ
+            useEffect(() => {
+                const savedData = localStorage.getItem('cashDrawerData_v2');
+                if (savedData) {
+                    try {
+                        const parsed = JSON.parse(savedData);
+                        setFormData(parsed);
+                    } catch (e) {
+                        console.error("Error loading data", e);
+                    }
+                }
+                setIsLoaded(true);
+            }, []);
+
+            // [UPDATE] 2. บันทึกข้อมูลลง LocalStorage ทุกครั้งที่ formData เปลี่ยน
+            useEffect(() => {
+                if (isLoaded) {
+                    localStorage.setItem('cashDrawerData_v2', JSON.stringify(formData));
+                }
+            }, [formData, isLoaded]);
+
+            // [UPDATE] 3. คำนวณยอดเงิน (แก้ปัญหาทศนิยมเพี้ยน)
             useEffect(() => {
                 const parse = (val) => parseFloat(val) || 0;
+                
+                // ใช้ Math.round เพื่อปัดเศษทศนิยมให้ถูกต้อง
+                const safeFloat = (num) => Math.round(num * 100) / 100;
+
                 const breakdown = {
-                    amt1000: parse(formData.qty1000) * 1000,
-                    amt500: parse(formData.qty500) * 500,
-                    amt100: parse(formData.qty100) * 100,
-                    amt50: parse(formData.qty50) * 50,
-                    amt20: parse(formData.qty20) * 20,
-                    amt10: parse(formData.qty10) * 10,
-                    amt5: parse(formData.qty5) * 5,
-                    amt2: parse(formData.qty2) * 2,
-                    amt1: parse(formData.qty1) * 1,
+                    amt1000: safeFloat(parse(formData.qty1000) * 1000),
+                    amt500: safeFloat(parse(formData.qty500) * 500),
+                    amt100: safeFloat(parse(formData.qty100) * 100),
+                    amt50: safeFloat(parse(formData.qty50) * 50),
+                    amt20: safeFloat(parse(formData.qty20) * 20),
+                    amt10: safeFloat(parse(formData.qty10) * 10),
+                    amt5: safeFloat(parse(formData.qty5) * 5),
+                    amt2: safeFloat(parse(formData.qty2) * 2),
+                    amt1: safeFloat(parse(formData.qty1) * 1),
                 };
-                const totalCashReal = Object.values(breakdown).reduce((a, b) => a + b, 0);
+                
+                const totalCashReal = safeFloat(Object.values(breakdown).reduce((a, b) => a + b, 0));
                 const cashPos = parse(formData.cashPos);
-                const overShort = cashPos ? totalCashReal - cashPos : 0;
+                
+                // คำนวณ Over/Short
+                const overShort = cashPos ? safeFloat(totalCashReal - cashPos) : 0;
+                
                 setCalculations({ totalCashReal, overShort, breakdown });
             }, [formData]);
 
@@ -111,25 +144,37 @@
 
             const handlePrint = () => window.print();
 
+            // [UPDATE] 4. ปรับปรุงการเซฟรูปภาพให้คมชัดและสวยงาม
             const handleSaveImage = async () => {
                 setIsGeneratingImg(true);
-                setTimeout(async () => {
-                    try {
-                        const element = document.getElementById('printable-area');
-                        const canvas = await html2canvas(element, {
-                            scale: 2,
-                            backgroundColor: "#ffffff",
-                            logging: false
-                        });
-                        const link = document.createElement('a');
-                        link.download = `CashReport_${formData.date}.png`;
-                        link.href = canvas.toDataURL('image/png');
-                        link.click();
-                    } catch (err) {
-                        alert("Error: " + err);
-                    }
-                    setIsGeneratingImg(false);
-                }, 100);
+                await new Promise(r => setTimeout(r, 100)); // รอ UI update
+
+                try {
+                    const element = document.getElementById('printable-area');
+                    const canvas = await html2canvas(element, {
+                        scale: 3, // เพิ่มความชัด (Scale 3x)
+                        backgroundColor: "#ffffff",
+                        useCORS: true,
+                        logging: false,
+                        // ลบเงาและขอบตอนแปลงเป็นรูป เพื่อให้เหมือนเอกสารจริง
+                        onclone: (doc) => {
+                            const el = doc.getElementById('printable-area');
+                            if(el) {
+                                el.style.boxShadow = 'none';
+                                el.style.border = '1px solid #eee';
+                                el.style.borderRadius = '0';
+                            }
+                        }
+                    });
+                    
+                    const link = document.createElement('a');
+                    link.download = `CashReport_${formData.date}_${formData.branch}.png`;
+                    link.href = canvas.toDataURL('image/png');
+                    link.click();
+                } catch (err) {
+                    alert("Error creating image: " + err);
+                }
+                setIsGeneratingImg(false);
             };
 
             const handleExportCSV = () => {
@@ -155,40 +200,47 @@
             };
 
             const handleCopyText = () => {
-                const text = `🛒 *Cash Report*\n📍 ${formData.branch} (${formData.date})\n💰 Sale: ${formData.totalSale}\n💵 Real: ${calculations.totalCashReal}\n🖥 POS: ${formData.cashPos}\n${calculations.overShort > 0 ? '✅ Over: +' : '❌ Short: '}${calculations.overShort}\n📝 ${formData.note}`;
+                const text = `🛒 *Cash Report*\n📍 ${formData.branch} (${formData.date})\n💰 Sale: ${formData.totalSale}\n💵 Real: ${calculations.totalCashReal}\n🖥 POS: ${formData.cashPos}\n${calculations.overShort > 0 ? '✅ Over: +' : calculations.overShort < 0 ? '❌ Short: ' : '⚖️ '}${calculations.overShort}\n📝 ${formData.note}`;
                 navigator.clipboard.writeText(text);
                 setCopied(true);
                 setTimeout(() => setCopied(false), 2000);
             };
 
             const handleReset = () => {
-                if(window.confirm("รีเซ็ตค่าทั้งหมด?")) setFormData({ ...formData, qty1000: '', qty500: '', qty100: '', qty50: '', qty20: '', qty10: '', qty5: '', qty2: '', qty1: '', totalSale: '', cashPos: '', note: '' });
+                if(window.confirm("ต้องการรีเซ็ตค่าทั้งหมดหรือไม่? (ข้อมูลที่บันทึกไว้จะหายไป)")) {
+                    localStorage.removeItem('cashDrawerData_v2'); // ล้างข้อมูลใน Storage
+                    setFormData(initialState);
+                }
             };
 
             const formatCurrency = (num) => new Intl.NumberFormat('th-TH', { style: 'decimal', minimumFractionDigits: 2 }).format(num);
 
+            if (!isLoaded) return <div className="p-10 text-center">Loading...</div>;
+
             return (
                 <div className="min-h-screen p-2 sm:p-8 font-sans print:bg-white print:p-0 bg-gray-50">
                     <div className="max-w-3xl mx-auto mb-4 flex flex-col gap-4 print:hidden bg-white p-4 rounded-xl shadow-sm border border-gray-100">
-                        <h1 className="text-xl font-bold text-gray-800 text-center sm:text-left">ใบนับเงินสด (Daily Cash)</h1>
+                        <div className="flex justify-between items-center">
+                            <h1 className="text-xl font-bold text-gray-800">ใบนับเงินสด (Daily Cash)</h1>
+                            <span className="text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-200">💾 Auto-Saved</span>
+                        </div>
                         <div className="flex flex-wrap justify-center sm:justify-start gap-2">
-                            <button onClick={handleReset} className="flex items-center gap-1 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700 text-sm font-medium"><IconRefresh /> Reset</button>
-                            <button onClick={handleCopyText} className="flex items-center gap-1 px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 text-sm font-medium">{copied ? <IconCheck /> : <IconCopy />} {copied ? 'Copied!' : 'Text'}</button>
-                            <button onClick={handleExportCSV} className="flex items-center gap-1 px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 text-sm font-medium"><IconExcel /> Excel</button>
-                            <button onClick={handleSaveImage} disabled={isGeneratingImg} className="flex items-center gap-1 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 text-sm font-medium">
+                            <button onClick={handleReset} className="flex items-center gap-1 px-3 py-2 bg-gray-100 rounded-lg hover:bg-gray-200 text-gray-700 text-sm font-medium transition-colors"><IconRefresh /> Reset</button>
+                            <button onClick={handleCopyText} className="flex items-center gap-1 px-3 py-2 bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg hover:bg-indigo-100 text-sm font-medium transition-colors">{copied ? <IconCheck /> : <IconCopy />} {copied ? 'Copied!' : 'Text'}</button>
+                            <button onClick={handleExportCSV} className="flex items-center gap-1 px-3 py-2 bg-green-50 text-green-700 border border-green-200 rounded-lg hover:bg-green-100 text-sm font-medium transition-colors"><IconExcel /> Excel</button>
+                            <button onClick={handleSaveImage} disabled={isGeneratingImg} className="flex items-center gap-1 px-3 py-2 bg-orange-50 text-orange-700 border border-orange-200 rounded-lg hover:bg-orange-100 text-sm font-medium transition-colors">
                                 <IconImage /> {isGeneratingImg ? 'Creating...' : 'Image'}
                             </button>
-                            <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm text-sm font-medium"><IconPrinter /> PDF/Print</button>
+                            <button onClick={handlePrint} className="flex items-center gap-1 px-3 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 shadow-sm text-sm font-medium transition-colors"><IconPrinter /> PDF/Print</button>
                         </div>
                     </div>
 
                     {/* พื้นที่หลักสำหรับพิมพ์/บันทึกภาพ */}
                     <div id="printable-area" className="max-w-[210mm] mx-auto bg-white shadow-lg sm:rounded-lg overflow-hidden border border-gray-200 print:shadow-none print:border-none print:w-full print:max-w-none print:h-auto">
                         
-                        {/* HEADER: ปรับให้ยืดหยุ่นบนมือถือ (แนวตั้ง) แต่แนวนอนบนจอใหญ่/Print */}
+                        {/* HEADER */}
                         <div className="bg-slate-800 text-white p-5 print:bg-white print:text-black print:border-b-2 print:border-black print:p-0 print:pb-4 print:mb-4">
                             <div className="flex flex-col sm:flex-row print:flex-row justify-between items-start gap-4 sm:gap-0 print:gap-0">
-                                {/* ส่วน Branch */}
                                 <div className="w-full sm:flex-1 print:flex-1 sm:mr-8 print:mr-8">
                                     <label className="block text-xs text-slate-400 print:text-black uppercase font-bold mb-1">Branch</label>
                                     <input 
@@ -200,8 +252,6 @@
                                         placeholder="ระบุสาขา..." 
                                     />
                                 </div>
-                                
-                                {/* ส่วน Date/Time */}
                                 <div className="w-full sm:w-auto print:w-auto text-left sm:text-right print:text-right flex flex-row sm:flex-col print:flex-col justify-between sm:justify-start gap-4 sm:gap-0">
                                     <div className="sm:mb-2 print:mb-2">
                                         <span className="text-xs text-slate-400 print:text-black mr-2 font-bold uppercase">Date:</span>
@@ -215,7 +265,7 @@
                             </div>
                         </div>
 
-                        {/* CONTENT: ปรับ Grid ให้เป็น 1 คอลัมน์บนมือถือ */}
+                        {/* CONTENT */}
                         <div className="p-4 sm:p-6 print:p-0 grid grid-cols-1 md:grid-cols-2 print:grid-cols-2 gap-6 print:gap-8">
                             
                             {/* LEFT COLUMN */}
@@ -226,25 +276,25 @@
                                     <div className="space-y-3 text-sm">
                                         <div className="flex justify-between items-center">
                                             <label className="font-medium text-gray-700">Total Sale</label>
-                                            <input type="number" name="totalSale" value={formData.totalSale} onChange={handleInputChange} className="w-32 h-10 text-right border border-gray-300 rounded px-2 text-lg bg-white focus:border-blue-500 outline-none" placeholder="0.00" />
+                                            <input type="number" min="0" onKeyDown={blockInvalidChar} name="totalSale" value={formData.totalSale} onChange={handleInputChange} className="w-32 h-10 text-right border border-gray-300 rounded px-2 text-lg bg-white focus:border-blue-500 outline-none" placeholder="0.00" />
                                         </div>
                                         <div className="flex justify-between items-center">
                                             <label className="font-medium text-red-600 print:text-black">Return/Wrong Key</label>
-                                            <input type="number" name="returnWrongKey" value={formData.returnWrongKey} onChange={handleInputChange} className="w-32 h-10 text-right border border-gray-300 rounded px-2 text-lg bg-white focus:border-blue-500 outline-none" placeholder="0.00" />
+                                            <input type="number" min="0" onKeyDown={blockInvalidChar} name="returnWrongKey" value={formData.returnWrongKey} onChange={handleInputChange} className="w-32 h-10 text-right border border-gray-300 rounded px-2 text-lg bg-white focus:border-blue-500 outline-none" placeholder="0.00" />
                                         </div>
                                         
                                         <div className="border-t border-gray-200 my-3 pt-3 space-y-2">
                                             <div className="flex justify-between items-center text-gray-600 text-xs sm:text-sm">
                                                 <label>Credit Card</label>
-                                                <input type="number" name="creditCard" value={formData.creditCard} onChange={handleInputChange} className="w-24 h-8 text-right border border-gray-300 rounded px-1 bg-white" />
+                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="creditCard" value={formData.creditCard} onChange={handleInputChange} className="w-24 h-8 text-right border border-gray-300 rounded px-1 bg-white" />
                                             </div>
                                             <div className="flex justify-between items-center text-gray-600 text-xs sm:text-sm">
                                                 <label>WeChat</label>
-                                                <input type="number" name="wechat" value={formData.wechat} onChange={handleInputChange} className="w-24 h-8 text-right border border-gray-300 rounded px-1 bg-white" />
+                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="wechat" value={formData.wechat} onChange={handleInputChange} className="w-24 h-8 text-right border border-gray-300 rounded px-1 bg-white" />
                                             </div>
                                             <div className="flex justify-between items-center text-gray-600 text-xs sm:text-sm">
                                                 <label>Alipay / +</label>
-                                                <input type="number" name="alipay" value={formData.alipay} onChange={handleInputChange} className="w-24 h-8 text-right border border-gray-300 rounded px-1 bg-white" />
+                                                <input type="number" min="0" onKeyDown={blockInvalidChar} name="alipay" value={formData.alipay} onChange={handleInputChange} className="w-24 h-8 text-right border border-gray-300 rounded px-1 bg-white" />
                                             </div>
                                         </div>
                                     </div>
@@ -304,7 +354,7 @@
                                         </div>
                                         <div className="flex justify-between items-center mb-4 text-sm text-gray-600 print:text-black">
                                             <span>Cash POS</span>
-                                            <input type="number" name="cashPos" value={formData.cashPos} onChange={handleInputChange} placeholder="0.00" className="w-32 h-10 px-2 text-right border border-gray-300 rounded text-lg bg-white focus:border-blue-500 outline-none" />
+                                            <input type="number" min="0" onKeyDown={blockInvalidChar} name="cashPos" value={formData.cashPos} onChange={handleInputChange} placeholder="0.00" className="w-32 h-10 px-2 text-right border border-gray-300 rounded text-lg bg-white focus:border-blue-500 outline-none" />
                                         </div>
                                         <div className={`p-3 rounded-lg flex justify-between items-center border-2 ${calculations.overShort === 0 ? 'bg-gray-100 border-gray-200 text-gray-600' : calculations.overShort > 0 ? 'bg-green-100 border-green-300 text-green-800' : 'bg-red-100 border-red-300 text-red-800'} print:border-black print:bg-transparent print:text-black`}>
                                             <div className="font-bold text-sm uppercase">{calculations.overShort === 0 ? 'Balanced' : calculations.overShort > 0 ? 'OVER (+)' : 'SHORT (-)'}</div>
@@ -317,7 +367,7 @@
                     </div>
                     
                     <div className="text-center text-xs text-gray-400 mt-6 pb-4 print:hidden">
-                        © Cash Drawer System - Mobile Optimized
+                        © Cash Drawer System - Pro Version
                     </div>
                 </div>
             );
@@ -328,5 +378,3 @@
     </script>
 </body>
 </html>
-
-
