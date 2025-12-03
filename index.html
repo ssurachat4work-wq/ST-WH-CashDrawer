@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ใบนับเงินสด (BY SHU ST)</title>
+    <title>ใบนับเงินสด (BY SHU ST) + Alipay Plus</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     
@@ -93,10 +93,11 @@
         );
 
         function App() {
+            // [EDIT 1] เพิ่ม 'alipay+' ใน initialState
             const initialState = {
                 branch: '', date: new Date().toISOString().split('T')[0],
                 time: new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit' }),
-                returnWrongKey: '', totalSale: '', creditCard: '', debit: '', wechat: '', alipay: '',
+                returnWrongKey: '', totalSale: '', creditCard: '', debit: '', wechat: '', alipay: '', 'alipay+': '',
                 qty1000: '', qty500: '', qty100: '', qty50: '', qty20: '', 
                 qty10: '', qty5: '', qty2: '', qty1: '', 
                 cashPos: '', recipient: '', note: ''
@@ -143,24 +144,19 @@
 
             const handleSaveImage = async () => {
                 setIsGeneratingImg(true);
-                // รอให้ Template พร้อม
                 await new Promise(r => setTimeout(r, 200));
                 
                 try {
-                    // เลือก ID ที่เป็น Template เอกสาร ไม่ใช่หน้าจอหลัก
                     const element = document.getElementById('document-template');
-                    
-                    // ต้องทำให้มันมองเห็นชั่วคราวเพื่อให้ html2canvas จับภาพได้
                     element.style.display = 'block';
                     
                     const canvas = await html2canvas(element, {
-                        scale: 2.5, // ความคมชัดสูง
+                        scale: 2.5,
                         backgroundColor: "#ffffff",
                         logging: false,
                         windowWidth: 800,
                     });
 
-                    // ซ่อนกลับไปเหมือนเดิม
                     element.style.display = 'none';
 
                     const link = document.createElement('a');
@@ -202,6 +198,9 @@
             };
 
             if (!isLoaded) return <div className="p-10 text-center">Loading...</div>;
+
+            // List รายการจ่ายเงิน (รวม Alipay+)
+            const paymentMethods = ['Credit Card', 'Debit Card', 'WeChat', 'Alipay', 'Alipay+'];
 
             return (
                 <div className="min-h-screen bg-gray-100 flex flex-col items-center py-8">
@@ -262,7 +261,8 @@
                                                 <input type="number" name="returnWrongKey" value={formData.returnWrongKey} onChange={handleInputChange} onKeyDown={blockInvalidChar} placeholder="0.00" className="w-32 text-right p-1 border border-red-300 rounded focus:border-red-500 outline-none text-lg font-bold text-red-600 bg-red-50" />
                                             </div>
                                             <div className="pt-3 border-t border-blue-200 space-y-2">
-                                                {['Credit Card', 'Debit Card', 'WeChat', 'Alipay'].map(label => (
+                                                {/* [EDIT 2] ใช้ loop แบบใหม่ที่มี Alipay+ */}
+                                                {paymentMethods.map(label => (
                                                     <div key={label} className="flex justify-between items-center text-sm text-gray-600">
                                                         <span>{label}</span>
                                                         <input type="number" name={label.toLowerCase().replace(' ', '').replace('/', '')} value={formData[label.toLowerCase().replace(' ', '').replace('/', '')]} onChange={handleInputChange} onKeyDown={blockInvalidChar} className="w-24 text-right p-1 border border-gray-300 rounded focus:border-blue-400 outline-none" />
@@ -319,7 +319,6 @@
 
 
                     {/* --- HIDDEN DOCUMENT TEMPLATE (สำหรับสร้างรูป & Print) --- */}
-                    {/* นี่คือส่วนที่ถูกซ่อนไว้ จะโชว์เฉพาะตอนกด Image หรือ Print */}
                     <div id="document-template" className="hidden bg-white mx-auto w-[210mm] p-8 text-black" style={{ maxWidth: '800px' }}>
                         
                         {/* Header */}
@@ -358,7 +357,8 @@
                                             <div className="text-lg font-bold border border-gray-300 px-3 py-1 rounded w-32 text-right bg-gray-50">{formData.returnWrongKey || '0.00'}</div>
                                         </div>
                                         <div className="pt-2 mt-2 border-t border-gray-300 space-y-2">
-                                            {['Credit Card', 'Debit Card', 'WeChat', 'Alipay'].map(label => {
+                                            {/* [EDIT 3] เพิ่ม Alipay+ ในหน้าเอกสารด้วย */}
+                                            {paymentMethods.map(label => {
                                                 const key = label.toLowerCase().replace(' ', '').replace('/', '');
                                                 return (
                                                     <div key={key} className="flex justify-between items-center">
